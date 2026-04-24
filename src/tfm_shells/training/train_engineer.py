@@ -75,6 +75,25 @@ def _nested_epoch_lambda(
     )
 
 
+def _sample_engineer_noisy_inputs(
+    z_clean: torch.Tensor,
+    scheduler,
+    t_max: int,
+    device: torch.device,
+    noise_mode: str,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    batch_size = z_clean.shape[0]
+    mode = str(noise_mode)
+    if mode == "clean_only":
+        timesteps = torch.zeros((batch_size,), device=device, dtype=torch.long)
+        return timesteps, z_clean
+    if mode == "diffused":
+        noise = torch.randn_like(z_clean)
+        timesteps = torch.randint(0, t_max, (batch_size,), device=device, dtype=torch.long)
+        return timesteps, scheduler.add_noise(z_clean, noise, timesteps)
+    raise ValueError(f"Unsupported training.noise_mode: {mode}")
+
+
 def _run_epoch(
     model: torch.nn.Module,
     loader: DataLoader,
@@ -112,6 +131,7 @@ def _run_epoch(
 
     power = float(config["training"]["timestep_power"])
     t_max = int(scheduler.config.num_train_timesteps)
+    noise_mode = str(config["training"].get("noise_mode", "diffused"))
     weak_form_cfg = config["training"].get("weak_form", {})
     active_refinement_cfg = config["training"].get("active_refinement", {})
     use_uncertainty_weighting = bool(config["training"].get("uncertainty_weighting", False))
@@ -133,9 +153,13 @@ def _run_epoch(
 
             p_mean, p_std = expand_physics_stats(stats, batch_size, device)
 
-            noise = torch.randn_like(z_clean)
-            timesteps = torch.randint(0, t_max, (batch_size,), device=device, dtype=torch.long)
-            z_noisy = scheduler.add_noise(z_clean, noise, timesteps)
+            timesteps, z_noisy = _sample_engineer_noisy_inputs(
+                z_clean=z_clean,
+                scheduler=scheduler,
+                t_max=t_max,
+                device=device,
+                noise_mode=noise_mode,
+            )
 
             if is_train:
                 optimizer.zero_grad(set_to_none=True)
