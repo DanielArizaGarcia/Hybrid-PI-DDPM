@@ -5,8 +5,8 @@ data:
   subset: all
   min_mf_mean: null
   val_ratio: 0.20
-  batch_size: 16
-  num_workers: 0
+  batch_size: 32
+  num_workers: 2
   pin_memory: true
   include_fz_channel: false
 
@@ -41,8 +41,8 @@ training:
   lr_patience: 8
   lr_factor: 0.5
   early_stopping_patience: 15
-  mixed_precision: false
-  sample_every_n_epochs: 10
+  mixed_precision: true
+  sample_every_n_epochs: 5
   sample_batch_size: 6
   sample_inference_steps: 1000
 
