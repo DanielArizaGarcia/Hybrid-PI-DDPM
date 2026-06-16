@@ -1,12 +1,17 @@
-﻿seed: 42
+# E0 — Engineer hibrido con incertidumbre (shell_weakrefine_operator). Subset=solid, regimen identico.
+# Decision E0: la cabeza de incertidumbre (predict_log_variance + uncertainty_weighting) SE MANTIENE
+# porque la necesitamos en E2/E3; pero weak_form y active_refinement se DESACTIVAN para que la
+# perdida sea comparable a los otros dos (son ablaciones separadas, no parte del benchmark de
+# arquitectura). lambda_max fisico = 1e-3, igual que pb_unet/equino.
+seed: 42
 
 data:
   dataset_dir: ../Datos/processed_image2
-  subset: all
+  subset: solid
   min_mf_mean: null
   val_ratio: 0.20
   batch_size: 8
-  num_workers: 0
+  num_workers: 2
   pin_memory: true
   include_fz_channel: true
 
@@ -40,31 +45,24 @@ training:
   lr_factor: 0.5
   early_stopping_patience: 15
   mixed_precision: false
-  lambda_max: 5.0e-4
+  lambda_max: 1.0e-3
   warmup_epochs: 10
   timestep_power: 2.0
   uncertainty_weighting: true
   weak_form:
-    enabled: true
-    lambda_max: 1.0e-3
-    warmup_epochs: 5
-    num_test_modes: 4
+    enabled: false
   active_refinement:
-    enabled: true
-    lambda_max: 2.0e-1
-    warmup_epochs: 5
-    topk_ratio: 0.20
-    residual_weight: 0.55
-    uncertainty_weight: 0.45
+    enabled: false
 
 mlflow:
   tracking_uri: ./mlruns
-  experiment_name: engineer_shell_weakrefine_operator
-  run_name_prefix: engineer_swo
+  experiment_name: e0_engineer_benchmark
+  run_name_prefix: e0_weakrefine
   tags:
     model_role: engineer
     model_family: shell_weakrefine_operator
-    stage: thesis
+    stage: tfm_e0
+    subset: solid
 
 runtime:
   device: auto

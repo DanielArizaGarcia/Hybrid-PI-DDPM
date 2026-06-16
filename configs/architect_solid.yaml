@@ -1,8 +1,12 @@
-﻿seed: 42
+# Architect (prior geometrico INCONDICIONAL) entrenado en subset=solid.
+# Es el prior congelado que necesita E3 (muestreo guiado) para el TFM, alineado con los
+# engineers de E0 (tambien solid). NO modifica architect.yaml (subset=all), que se conserva
+# por si vuelve el flujo Colab/Drive.
+seed: 42
 
 data:
   dataset_dir: ../Datos/processed_image2
-  subset: all
+  subset: solid
   min_mf_mean: null
   val_ratio: 0.20
   batch_size: 32
@@ -48,11 +52,12 @@ training:
 
 mlflow:
   tracking_uri: ./mlruns
-  experiment_name: architect_all_structures
-  run_name_prefix: architect
+  experiment_name: architect_solid
+  run_name_prefix: architect_solid
   tags:
     model_role: architect
-    stage: thesis
+    stage: tfm_prior
+    subset: solid
 
 runtime:
   device: auto

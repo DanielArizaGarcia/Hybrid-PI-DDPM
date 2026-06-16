@@ -1,7 +1,7 @@
-seed: 7
+﻿seed: 7
 
 conditioning:
-  source_file: ../Datos/processed_image2/processed_image2/shell_2600.npz
+  source_file: ../Datos/processed_image2/shell_2600.npz
   batch_size: 8
 
 architect:

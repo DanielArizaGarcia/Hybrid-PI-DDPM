@@ -1,17 +1,20 @@
-﻿seed: 42
+# E0 — Engineer espectral (equino, operador tipo Fourier). Subset=solid, regimen identico.
+# Comparte TODO el bloque training/data con engineer_e0_pb_unet y engineer_e0_weakrefine.
+# Diferencia: model.kind=equino + hiperparametros intrinsecos del operador espectral.
+seed: 42
 
 data:
   dataset_dir: ../Datos/processed_image2
-  subset: all
+  subset: solid
   min_mf_mean: null
   val_ratio: 0.20
   batch_size: 8
-  num_workers: 0
+  num_workers: 2
   pin_memory: true
   include_fz_channel: true
 
 model:
-  kind: shell_weakrefine_operator
+  kind: equino
   sample_size: 64
   in_channels: 2
   out_channels: 13
@@ -24,9 +27,10 @@ model:
   spectral_modes_height: 16
   spectral_modes_width: 16
   time_embedding_dim: 256
-  branch_hidden_channels: 128
+  head_hidden_channels: 128
+  modal_rank: 12
+  modal_residual_weight: 0.25
   use_coordinate_grid: true
-  predict_log_variance: true
   dropout: 0.05
   beta_schedule: squaredcos_cap_v2
   prediction_type: v_prediction
@@ -40,31 +44,19 @@ training:
   lr_factor: 0.5
   early_stopping_patience: 15
   mixed_precision: false
-  lambda_max: 5.0e-4
+  lambda_max: 1.0e-3
   warmup_epochs: 10
   timestep_power: 2.0
-  uncertainty_weighting: true
-  weak_form:
-    enabled: true
-    lambda_max: 1.0e-3
-    warmup_epochs: 5
-    num_test_modes: 4
-  active_refinement:
-    enabled: true
-    lambda_max: 2.0e-1
-    warmup_epochs: 5
-    topk_ratio: 0.20
-    residual_weight: 0.55
-    uncertainty_weight: 0.45
 
 mlflow:
   tracking_uri: ./mlruns
-  experiment_name: engineer_shell_weakrefine_operator
-  run_name_prefix: engineer_swo
+  experiment_name: e0_engineer_benchmark
+  run_name_prefix: e0_equino
   tags:
     model_role: engineer
-    model_family: shell_weakrefine_operator
-    stage: thesis
+    model_family: equino
+    stage: tfm_e0
+    subset: solid
 
 runtime:
   device: auto

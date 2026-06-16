@@ -22,6 +22,7 @@ __pycache__/
 artifacts/
 /models/
 mlruns/
+paper_combined_selected_results_check.*
 
 # OS / editors
 .DS_Store
@@ -41,6 +42,8 @@ Thumbs.db
 !/src/
 !/src/**/
 !/src/**/*.py
+src/**/__pycache__/
+src/**/*.pyc
 
 
 #Comparaciones entre modelos
