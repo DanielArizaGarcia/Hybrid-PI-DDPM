@@ -27,6 +27,7 @@ from tfm_shells.training.common import (
     prepare_run_directories,
     resolve_device,
     save_history,
+    sample_timesteps,
     save_run_metadata,
     seed_everything,
     timestep_weights,
@@ -134,7 +135,7 @@ def _run_epoch(
             p_mean, p_std = expand_physics_stats(stats, batch_size, device)
 
             noise = torch.randn_like(z_clean)
-            timesteps = torch.randint(0, t_max, (batch_size,), device=device, dtype=torch.long)
+            timesteps = sample_timesteps(config["training"], batch_size, t_max, device)
             z_noisy = scheduler.add_noise(z_clean, noise, timesteps)
 
             if is_train:
@@ -337,8 +338,11 @@ def train_engineer(config_path: str | Path) -> dict[str, Any]:
     }
     save_run_metadata(config, directories, stats, splits)
 
-    train_dataset = ShellDataset(train_records, stats=stats, include_physics=True)
-    val_dataset = ShellDataset(val_records, stats=stats, include_physics=True)
+    augment_d4 = bool(config["data"].get("augment_d4", False))
+    train_dataset = ShellDataset(
+        train_records, stats=stats, include_physics=True, augment_d4=augment_d4
+    )
+    val_dataset = ShellDataset(val_records, stats=stats, include_physics=True, augment_d4=False)
 
     train_loader = DataLoader(
         train_dataset,

@@ -146,6 +146,32 @@ def timestep_weights(timesteps: torch.Tensor, t_max: int, power: float) -> torch
     return torch.pow(1.0 - t_norm, power)
 
 
+def sample_timesteps(
+    training_cfg: dict[str, Any],
+    batch_size: int,
+    t_max: int,
+    device: torch.device,
+) -> torch.Tensor:
+    """Muestrea timesteps de entrenamiento. Por defecto UNIFORME (sin cambio de comportamiento).
+
+    Si training.timestep_sampling == 'bell', muestrea de una mezcla campana+uniforme centrada en la
+    ventana de guiado (riesgo de Bayes bajo la distribucion de consulta del bell de inferencia).
+    """
+    mode = str(training_cfg.get("timestep_sampling", "uniform"))
+    if mode == "uniform":
+        return torch.randint(0, t_max, (batch_size,), device=device, dtype=torch.long)
+    if mode == "bell":
+        peak = float(training_cfg.get("sampling_bell_peak", 0.5))
+        width = float(training_cfg.get("sampling_bell_width", 0.22))
+        eps = float(training_cfg.get("sampling_uniform_mix", 0.2))
+        t = torch.arange(t_max, device=device, dtype=torch.float32)
+        r = t / float(max(t_max - 1, 1))
+        bell = torch.exp(-((r - peak) ** 2) / (2.0 * width ** 2))
+        probs = (1.0 - eps) * (bell / bell.sum()) + eps * (1.0 / float(t_max))
+        return torch.multinomial(probs, batch_size, replacement=True).to(torch.long)
+    raise ValueError(f"timestep_sampling desconocido: {mode}")
+
+
 def bell_guidance_weight(step_index: int, total_steps: int, w_max: float, peak: float, width: float) -> float:
     if total_steps <= 1:
         return float(w_max)
