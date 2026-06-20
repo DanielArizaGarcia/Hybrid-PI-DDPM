@@ -1,0 +1,67 @@
+# E0-HOLE - equino con MUESTREO DE TIMESTEPS EN CAMPANA (re-test de un metodo NEGATIVO en solid).
+# Identico a engineer_e0_equino_hole.yaml salvo training.timestep_sampling=bell.
+seed: 42
+
+data:
+  dataset_dir: ../Datos/processed_image2
+  subset: hole
+  min_mf_mean: null
+  val_ratio: 0.20
+  batch_size: 8
+  num_workers: 0
+  pin_memory: true
+  include_fz_channel: true
+
+model:
+  kind: equino
+  sample_size: 64
+  in_channels: 2
+  out_channels: 13
+  branch_channels:
+    u: 1
+    m: 6
+    f: 6
+  operator_width: 128
+  num_operator_layers: 6
+  spectral_modes_height: 16
+  spectral_modes_width: 16
+  time_embedding_dim: 256
+  head_hidden_channels: 128
+  modal_rank: 12
+  modal_residual_weight: 0.25
+  use_coordinate_grid: true
+  dropout: 0.05
+  beta_schedule: squaredcos_cap_v2
+  prediction_type: v_prediction
+
+training:
+  epochs: 60
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-4
+  grad_clip_norm: 1.0
+  lr_patience: 8
+  lr_factor: 0.5
+  early_stopping_patience: 15
+  mixed_precision: false
+  lambda_max: 1.0e-3
+  warmup_epochs: 10
+  timestep_power: 2.0
+  timestep_sampling: bell
+  sampling_bell_peak: 0.5
+  sampling_bell_width: 0.22
+  sampling_uniform_mix: 0.2
+
+mlflow:
+  tracking_uri: ./mlruns
+  experiment_name: e0_engineer_benchmark
+  run_name_prefix: e0_equino_bellw_hole
+  tags:
+    model_role: engineer
+    model_family: equino
+    stage: tfm_e0
+    subset: hole
+    variant: bell_weighted
+
+runtime:
+  device: auto
+  project_name: tfm_shells
