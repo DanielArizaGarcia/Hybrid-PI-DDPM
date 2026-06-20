@@ -1,0 +1,38 @@
+# Orden recomendado para el cuaderno de Colab.
+# Estos comandos asumen que el repo esta en /content/Hybrid-PI-DDPM y el dataset en
+# /content/Datos/processed_image2, de modo que ../Datos/processed_image2 resuelve bien.
+
+stage: tfm_e5_uncertainty
+
+train_order:
+  - name: architect_solid_frozen
+    command: uv run python train_architect.py --config configs/colab_e5_architect_solid.yaml
+    required_for: [sampling]
+  - name: a0_weakrefine_nll
+    command: uv run python train_engineer.py --config configs/colab_e5_uq_a0_weakrefine_nll.yaml
+    purpose: baseline UQ limpio
+  - name: a1_weakrefine_weak
+    command: uv run python train_engineer.py --config configs/colab_e5_uq_a1_weakrefine_weak.yaml
+    purpose: prueba de weak form
+  - name: a2_weakrefine_refine
+    command: uv run python train_engineer.py --config configs/colab_e5_uq_a2_weakrefine_refine.yaml
+    purpose: prueba de active refinement guiado por incertidumbre
+  - name: a3_weakrefine_full
+    command: uv run python train_engineer.py --config configs/colab_e5_uq_a3_weakrefine_full.yaml
+    purpose: weak form + active refinement
+  - name: a4_weakrefine_bellw_full
+    command: uv run python train_engineer.py --config configs/colab_e5_uq_a4_weakrefine_bellw_full.yaml
+    purpose: full + muestreo de timesteps en ventana de guiado
+
+sampling_templates:
+  - name: no_guidance
+    command: uv run python sample_guided.py --config configs/colab_e5_sample_no_guidance.yaml
+  - name: fixed_bell
+    command: uv run python sample_guided.py --config configs/colab_e5_sample_bell.yaml
+
+notes:
+  - Montar Drive antes de entrenar: from google.colab import drive; drive.mount('/content/drive')
+  - Los YAML Colab guardan automaticamente en /content/drive/MyDrive/TFM-PD/e5_runs mediante runtime.output_root.
+  - Sustituir models/architect/latest y models/engineer/latest por timestamps concretos antes de reportar resultados.
+  - El guiado adaptativo por incertidumbre no esta soportado aun en sampling/guided.py solo con YAML.
+  - Para E5 adaptativo usar los scripts experimentales existentes o implementar una extension explicita del sampler.
