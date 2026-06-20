@@ -12,6 +12,7 @@ Local:
 """
 from __future__ import annotations
 import sys, os, math, time, glob
+os.environ["MPLBACKEND"] = "Agg"   # Colab fija el backend inline; forzar Agg ANTES de importar matplotlib
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import numpy as np
@@ -41,7 +42,9 @@ VAE_CK = OUT / "vae_solid.pt"
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 N = int(os.environ.get("R3_N", 256)); BATCH = 8
-STEPS = int(os.environ.get("R3_STEPS", 250)); SCALE = 600.0
+# STEPS = pasos de muestreo. Fiel al entrenamiento = T=1000 (= sample_guided.yaml). 100/250 son
+# aproximaciones aceleradas (subconjunto de los 1000) y dan resultados distintos -> usar 1000.
+STEPS = int(os.environ.get("R3_STEPS", 1000)); SCALE = 600.0
 W_MAX, BELL_PEAK, BELL_WIDTH, GRAD_CLIP, SEED = 1.0, 0.5, 0.22, 20.0, 7
 TAU_A3 = 1.63
 B_BOOT = 3000
@@ -141,7 +144,8 @@ def gen(arm, architect, a_stats, engineer, e_stats, scheduler, n, seed):
         zs.append(x.detach())
     z = torch.cat(zs, 0)
     a_min, a_max = float(a_stats["z_min"]), float(a_stats["z_max"])
-    return ((z.cpu().numpy() + 1) / 2) * (a_max - a_min) + a_min, z
+    zr = ((z.cpu().numpy() + 1) / 2) * (a_max - a_min) + a_min
+    return zr[:, 0], z   # (n,64,64) real (sin canal), y z normalizado (n,1,64,64)
 
 
 def judge_mf(z_norm_arch, a_stats, judge, j_stats):
@@ -196,6 +200,10 @@ def main():
         t0 = time.time(); log(f"  generando {arm}...")
         zr, zn = gen(arm, architect, a_stats, eng, est, scheduler, N, SEED)
         geoms[arm] = zr; znorm[arm] = zn; log(f"  generado {arm} ({time.time()-t0:.0f}s)")
+
+    # guardar las geometrias YA (lo caro), antes del post-proceso, por si algo falla luego
+    np.savez(OUT / "r3_geoms.npz", **{f"Z_{a}": geoms[a] for a in geoms})
+    log("geometrias guardadas:", OUT / "r3_geoms.npz")
 
     mfj = {a: judge_mf(znorm[a], a_stats, a3, a3k["normalization_stats"]) for a in geoms}
     lat = {}
