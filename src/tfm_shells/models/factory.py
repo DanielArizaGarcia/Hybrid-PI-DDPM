@@ -39,6 +39,7 @@ def build_unet(model_config: dict[str, Any]) -> torch.nn.Module:
             modal_residual_weight=float(model_config.get("modal_residual_weight", 0.25)),
             branch_channels=model_config.get("branch_channels"),
             use_coordinate_grid=bool(model_config.get("use_coordinate_grid", True)),
+            predict_log_variance=bool(model_config.get("predict_log_variance", False)),
             dropout=float(model_config.get("dropout", 0.0)),
         )
     if kind == "ufno":

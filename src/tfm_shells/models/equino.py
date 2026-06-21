@@ -11,6 +11,7 @@ import torch.nn.functional as F
 @dataclass
 class EquiNOOutput:
     sample: torch.Tensor
+    log_variance: torch.Tensor | None = None
 
 
 def _timestep_embedding(
@@ -198,6 +199,7 @@ class EquiNOModel(nn.Module):
         modal_residual_weight: float = 0.25,
         branch_channels: dict[str, int] | None = None,
         use_coordinate_grid: bool = True,
+        predict_log_variance: bool = False,
         dropout: float = 0.0,
     ) -> None:
         super().__init__()
@@ -205,6 +207,7 @@ class EquiNOModel(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.use_coordinate_grid = use_coordinate_grid
+        self.predict_log_variance = predict_log_variance
         self.time_embedding_dim = time_embedding_dim
 
         lifted_channels = in_channels + (2 if use_coordinate_grid else 0)
@@ -263,6 +266,16 @@ class EquiNOModel(nn.Module):
                 modal_residual_weight=modal_residual_weight,
             )
 
+        # cabeza de incertidumbre heterocedastica (1 mapa de log-varianza), opcional
+        if predict_log_variance:
+            self.uncertainty_head = nn.Sequential(
+                nn.Conv2d(operator_width, head_hidden_channels, kernel_size=1),
+                nn.GELU(),
+                nn.Conv2d(head_hidden_channels, 1, kernel_size=1),
+            )
+        else:
+            self.uncertainty_head = None
+
     def _coordinate_grid(self, batch_size: int, height: int, width: int, device: torch.device) -> torch.Tensor:
         y = torch.linspace(-1.0, 1.0, steps=height, device=device)
         x = torch.linspace(-1.0, 1.0, steps=width, device=device)
@@ -303,4 +316,8 @@ class EquiNOModel(nn.Module):
         else:
             output = torch.cat([self.branch_heads[name](x) for name in self.branch_names], dim=1)
 
-        return EquiNOOutput(sample=output)
+        log_variance = None
+        if self.uncertainty_head is not None:
+            log_variance = torch.clamp(self.uncertainty_head(x), min=-6.0, max=3.0)
+
+        return EquiNOOutput(sample=output, log_variance=log_variance)

@@ -44,6 +44,13 @@ from tfm_shells.utils.physics import (
 from tfm_shells.utils.tracking import ExperimentTracker
 
 
+def _masked_mean(x: torch.Tensor, mask: torch.Tensor | None) -> torch.Tensor:
+    """Media de x sobre pixeles con material (mask>0) y canales. Si mask is None -> media normal."""
+    if mask is None:
+        return x.mean()
+    return (x * mask).sum() / (mask.sum() * x.shape[1]).clamp_min(1.0)
+
+
 def _epoch_weight(lambda_max: float, warmup: int, total_epochs: int, epoch_index: int) -> float:
     if epoch_index < warmup:
         return 0.0
@@ -116,6 +123,7 @@ def _run_epoch(
     weak_form_cfg = config["training"].get("weak_form", {})
     active_refinement_cfg = config["training"].get("active_refinement", {})
     use_uncertainty_weighting = bool(config["training"].get("uncertainty_weighting", False))
+    mask_hole = bool(config["training"].get("mask_hole", False))  # supervisar solo donde ds>0 (material)
     weak_lambda_epoch = _nested_epoch_lambda(config["training"], "weak_form", epoch - 1)
     refine_lambda_epoch = _nested_epoch_lambda(config["training"], "active_refinement", epoch - 1)
 
@@ -131,6 +139,9 @@ def _run_epoch(
             dv = batch["dv"].to(device, non_blocking=True)
             mf_true = batch["mf_true"].to(device, non_blocking=True)
             batch_size = z_clean.shape[0]
+
+            # mascara de material (1 donde ds>0, 0 en el hueco). Si mask_hole=False -> todo 1 (sin cambio).
+            material_mask = (ds > 0).float() if mask_hole else None
 
             p_mean, p_std = expand_physics_stats(stats, batch_size, device)
 
@@ -151,12 +162,13 @@ def _run_epoch(
 
                 sq_error = (pred_norm - physics_clean).square()
                 if use_uncertainty_weighting and log_variance is not None:
-                    loss_mse = (0.5 * (torch.exp(-log_variance) * sq_error + log_variance)).mean()
+                    nll = 0.5 * (torch.exp(-log_variance) * sq_error + log_variance)
+                    loss_mse = _masked_mean(nll, material_mask)
                     mean_uncertainty = torch.exp(log_variance.detach()).mean()
                 else:
-                    loss_mse = sq_error.mean()
+                    loss_mse = _masked_mean(sq_error, material_mask)
                     mean_uncertainty = torch.tensor(0.0, device=device)
-                branch_losses = branchwise_supervised_losses(pred_norm, physics_clean)
+                branch_losses = branchwise_supervised_losses(pred_norm, physics_clean, mask=material_mask)
 
                 if lambda_epoch > 0.0:
                     phys_per_sample = compute_physical_residual(pred_norm, p_mean, p_std, ds, dv, fz_real)
@@ -217,9 +229,15 @@ def _run_epoch(
                 model_input_t0 = torch.cat([z_clean, fz_cond], dim=1) if include_fz_channel else z_clean
                 pred_t0 = model(model_input_t0, torch.zeros(batch_size, device=device, dtype=torch.long)).sample
                 mf_pred_map = compute_membrane_factor_from_prediction(pred_t0, p_mean, p_std)
-                mf_pred_mean = mf_pred_map.mean(dim=(1, 2, 3))
-                mf_true_mean = mf_true.mean(dim=(1, 2, 3))
-                mf_mae = torch.abs(mf_pred_map - mf_true).mean(dim=(1, 2, 3))
+                if material_mask is None:
+                    mf_pred_mean = mf_pred_map.mean(dim=(1, 2, 3))
+                    mf_true_mean = mf_true.mean(dim=(1, 2, 3))
+                    mf_mae = torch.abs(mf_pred_map - mf_true).mean(dim=(1, 2, 3))
+                else:
+                    denom = material_mask.sum(dim=(1, 2, 3)).clamp_min(1.0)
+                    mf_pred_mean = (mf_pred_map * material_mask).sum(dim=(1, 2, 3)) / denom
+                    mf_true_mean = (mf_true * material_mask).sum(dim=(1, 2, 3)) / denom
+                    mf_mae = (torch.abs(mf_pred_map - mf_true) * material_mask).sum(dim=(1, 2, 3)) / denom
 
             total_loss += float(loss.item()) * batch_size
             total_mse += float(loss_mse.item()) * batch_size
@@ -382,7 +400,7 @@ def train_engineer(config_path: str | Path) -> dict[str, Any]:
     total_epochs = int(config["training"]["epochs"])
 
     run_name = make_run_name(config, role="engineer")
-    with ExperimentTracker(config, directories["project_root"], run_name) as tracker:
+    with ExperimentTracker(config, directories["output_root"], run_name) as tracker:
         summary_filtered = splits["dataset_summary"]["all_filtered"]
         print("\n" + "=" * 96)
         print("ENGINEER TRAINING")

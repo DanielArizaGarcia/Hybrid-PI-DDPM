@@ -31,13 +31,23 @@ def split_physics_channels(physics_real: torch.Tensor) -> dict[str, torch.Tensor
 def branchwise_supervised_losses(
     pred_norm: torch.Tensor,
     target_norm: torch.Tensor,
+    mask: torch.Tensor | None = None,
 ) -> dict[str, torch.Tensor]:
     pred = split_physics_channels(pred_norm)
     target = split_physics_channels(target_norm)
+
+    def _mse(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        err = (a - b) ** 2
+        if mask is None:
+            return torch.mean(err)
+        # media solo sobre pixeles con material (mask>0), promediada tambien sobre canales
+        denom = (mask.sum() * err.shape[1]).clamp_min(1.0)
+        return (err * mask).sum() / denom
+
     return {
-        "uz_mse": torch.mean((pred["uz"] - target["uz"]) ** 2),
-        "membrane_mse": torch.mean((pred["membrane"] - target["membrane"]) ** 2),
-        "flexion_mse": torch.mean((pred["flexion"] - target["flexion"]) ** 2),
+        "uz_mse": _mse(pred["uz"], target["uz"]),
+        "membrane_mse": _mse(pred["membrane"], target["membrane"]),
+        "flexion_mse": _mse(pred["flexion"], target["flexion"]),
     }
 
 
