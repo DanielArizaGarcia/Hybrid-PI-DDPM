@@ -221,7 +221,7 @@ def train_architect(config_path: str | Path) -> dict[str, Any]:
     total_epochs = int(config["training"]["epochs"])
 
     run_name = make_run_name(config, role="architect")
-    with ExperimentTracker(config, directories["project_root"], run_name) as tracker:
+    with ExperimentTracker(config, directories["output_root"], run_name) as tracker:
         summary_filtered = splits["dataset_summary"]["all_filtered"]
         print("\n" + "=" * 96)
         print("ARCHITECT TRAINING")

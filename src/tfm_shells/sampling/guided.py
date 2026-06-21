@@ -50,6 +50,21 @@ def _load_checkpoint(path: Path, device: torch.device) -> dict[str, Any]:
     return torch.load(path, map_location=device, weights_only=False)
 
 
+def _resolve_checkpoint_path(config: dict[str, Any], value: str | Path) -> Path:
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return path
+
+    output_root = config.get("runtime", {}).get("output_root")
+    if output_root:
+        root = Path(str(output_root)).expanduser()
+        candidate = (root / path).resolve() if not root.is_absolute() else root.resolve() / path
+        if candidate.exists():
+            return candidate
+
+    return resolve_project_path(config, path)
+
+
 def _bell_or_poly(config: dict[str, Any], step_index: int, total_steps: int) -> float:
     sampling_cfg = config["sampling"]
     mode = str(sampling_cfg["guidance_schedule"])
@@ -79,8 +94,8 @@ def run_guided_sampling(config_path: str | Path) -> dict[str, Any]:
     save_config(config, directories["run_root"] / "config.yaml")
     save_config(config, directories["model_root"] / "config.yaml")
 
-    architect_ckpt = _load_checkpoint(resolve_project_path(config, config["architect"]["checkpoint"]), device)
-    engineer_ckpt = _load_checkpoint(resolve_project_path(config, config["engineer"]["checkpoint"]), device)
+    architect_ckpt = _load_checkpoint(_resolve_checkpoint_path(config, config["architect"]["checkpoint"]), device)
+    engineer_ckpt = _load_checkpoint(_resolve_checkpoint_path(config, config["engineer"]["checkpoint"]), device)
 
     architect = build_unet(architect_ckpt["model_config"]).to(device)
     architect.load_state_dict(architect_ckpt["model_state_dict"])
@@ -203,7 +218,7 @@ def run_guided_sampling(config_path: str | Path) -> dict[str, Any]:
     plt.close(fig)
 
     run_name = make_run_name(config, role="sample")
-    with ExperimentTracker(config, directories["project_root"], run_name) as tracker:
+    with ExperimentTracker(config, directories["output_root"], run_name) as tracker:
         tracker.log_config(config)
         tracker.log_artifact(directories["run_root"] / "config.yaml", artifact_path="run")
         tracker.log_metrics(

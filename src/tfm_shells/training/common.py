@@ -35,17 +35,27 @@ def resolve_device(raw_device: str) -> torch.device:
 
 def prepare_run_directories(config: dict[str, Any], role: str) -> dict[str, Path]:
     root = project_root(config)
-    ensure_dir(root / "artifacts")
-    ensure_dir(root / "models")
-    ensure_dir(root / "mlruns")
+    raw_output_root = config.get("runtime", {}).get("output_root")
+    if raw_output_root:
+        output_root = Path(str(raw_output_root)).expanduser()
+        if not output_root.is_absolute():
+            output_root = root / output_root
+        output_root = output_root.resolve()
+    else:
+        output_root = root
+
+    ensure_dir(output_root / "artifacts")
+    ensure_dir(output_root / "models")
+    ensure_dir(output_root / "mlruns")
 
     run_stamp = timestamp()
-    run_root = ensure_dir(root / "artifacts" / role / f"{run_stamp}_{config_name(config)}")
-    model_root = ensure_dir(root / "models" / role / f"{run_stamp}_{config_name(config)}")
-    latest_root = root / "models" / role / "latest"
+    run_root = ensure_dir(output_root / "artifacts" / role / f"{run_stamp}_{config_name(config)}")
+    model_root = ensure_dir(output_root / "models" / role / f"{run_stamp}_{config_name(config)}")
+    latest_root = output_root / "models" / role / "latest"
 
     return {
         "project_root": root,
+        "output_root": output_root,
         "run_root": run_root,
         "model_root": model_root,
         "latest_root": latest_root,
